@@ -1,9 +1,10 @@
-"""resolver 单元测试（DESIGN.md §12.4）：名称/URL/appid 三种输入、发行商匹配。"""
+"""resolver 单元测试（DESIGN.md §12.4）：名称/URL/appid 三种输入、发行商精准发现。"""
 
 from __future__ import annotations
 
 import pytest
 
+from steam_monitor.config import Publisher
 from steam_monitor.resolver import (
     Resolver,
     appid_from_item,
@@ -73,18 +74,43 @@ class TestAppidFromItem:
         assert appid_from_item({"name": "X"}) is None
 
 
-class TestDiscover:
-    def test_polls_all_filters_and_pages_deduplicated(self, fake_client):
-        fake_client.add_search_item(1, "popularnew", 1)
-        fake_client.add_search_item(1, "popularnew", 2)   # 重复 → 去重
-        fake_client.add_search_item(2, "comingsoon", 1)
-        fake_client.add_search_item(3, "popularcomingsoon", 2)
+class TestDiscoverCreator:
+    """§12.4-7：发行商 creator 精准查询（clan/gid 显式或自动解析）。"""
+
+    def test_uses_explicit_params(self, fake_client):
+        fake_client.add_creator_apps(999, [100, 200])
         resolver = Resolver(fake_client)
-        appids = resolver.discover_publisher_candidates()
-        assert appids == [1, 2, 3]
-        # 3 filters × 2 pages 都被轮询
-        filters = {"popularnew", "comingsoon", "popularcomingsoon"}
-        assert all(f in [c.split(":")[1] for c in fake_client.calls] for f in filters)
+        appids, clan_id, gid = resolver.discover_creator_appids(Publisher("任天堂", 999, "GID1"))
+        assert appids == [100, 200]
+        assert clan_id == 999
+        assert gid == "GID1"
+        assert "creatorpage:任天堂" not in fake_client.calls  # 显式给出则不再解析主页
+
+    def test_resolves_params_from_page_when_missing(self, fake_client):
+        fake_client.set_publisher_creator("任天堂", 45479601, "GID_PAGE")
+        fake_client.add_creator_apps(45479601, [100])
+        resolver = Resolver(fake_client)
+        appids, clan_id, gid = resolver.discover_creator_appids(Publisher("任天堂"))
+        assert appids == [100]
+        assert clan_id == 45479601
+        assert gid == "GID_PAGE"
+        assert "creatorpage:任天堂" in fake_client.calls
+
+    def test_partial_params_only_page_lookup_for_missing(self, fake_client):
+        # clan 显式、gid 缺失 → 只解析 gid
+        fake_client.set_publisher_creator("任天堂", 45479601, "GID_PAGE")
+        fake_client.add_creator_apps(45479601, [100])
+        resolver = Resolver(fake_client)
+        appids, clan_id, gid = resolver.discover_creator_appids(Publisher("任天堂", 45479601))
+        assert appids == [100]
+        assert gid == "GID_PAGE"
+
+    def test_unresolvable_returns_none(self, fake_client):
+        resolver = Resolver(fake_client)
+        appids, clan_id, gid = resolver.discover_creator_appids(Publisher("不存在"))
+        assert appids == []
+        assert clan_id is None
+        assert gid is None
 
 
 class TestMatchPublisher:

@@ -1,23 +1,21 @@
-"""游戏名/URL/appid → appid；发行商新游戏列表抓取与匹配（DESIGN.md §5.2/§5.3）。"""
+"""游戏名/URL/appid → appid；发行商新游戏列表抓取（DESIGN.md §5.2/§5.3）。
+
+发行商监控线使用「creator 精准查询」：对每个被监控的发行商，按其 clan 账号 ID
+拉取其全部游戏列表（flavor=all = 即将发行 + 最新已发售），无需轮询商店全局列表。
+"""
 
 from __future__ import annotations
 
 import re
 from typing import Any
 
+from .config import Publisher
+
 __all__ = [
-    "DISCOVERY_PAGES",
     "Resolver",
-    "SEARCH_FILTERS",
     "appid_from_item",
     "parse_config_entry",
 ]
-
-#: 三个都要轮询的新游戏 filter（§5.2）
-SEARCH_FILTERS: tuple[str, ...] = ("popularnew", "comingsoon", "popularcomingsoon")
-
-#: 每个 filter 翻页数（count=50，翻 2 页足够）
-DISCOVERY_PAGES = 2
 
 #: 从商店 URL / 配置条目中提取 appid
 _APP_URL_PATTERN = re.compile(r"app/(\d+)")
@@ -88,23 +86,29 @@ class Resolver:
 
     # ---------- §5.2 发行商监控线 ----------
 
-    def discover_publisher_candidates(
-        self,
-        filters: tuple[str, ...] = SEARCH_FILTERS,
-        pages: int = DISCOVERY_PAGES,
-    ) -> list[int]:
-        """轮询 3 个 filter 各若干页，汇总候选 appid（去重、保持顺序）。"""
-        appids: list[int] = []
-        seen: set[int] = set()
-        for filter_name in filters:
-            for page in range(1, pages + 1):
-                items = self.client.search_results(filter_name, page=page)
-                for item in items:
-                    appid = appid_from_item(item)
-                    if appid is not None and appid not in seen:
-                        seen.add(appid)
-                        appids.append(appid)
-        return appids
+    def discover_creator_appids(
+        self, publisher: Publisher
+    ) -> tuple[list[int], int | None, str | None]:
+        """按发行商拉取其游戏 appid 列表（§5.2 精准查询）。
+
+        - clan_account_id / clan_announcement_gid 显式配置则直接用；
+          clan_account_id 缺失时从发行商主页自动解析（gid 主页无法可靠解析，
+          建议显式配置）。
+        - 返回 ``(appids, clan_id, gid)``；clan_id 或 gid 为 None 表示缺参数
+          （调用方记警告）。
+        """
+        clan_id = publisher.clan_account_id
+        gid = publisher.clan_announcement_gid
+        if clan_id is None or gid is None:
+            page_clan, page_gid = self.client.publisher_creator_params(publisher.name)
+            if clan_id is None:
+                clan_id = page_clan
+            if gid is None:
+                gid = page_gid
+        if clan_id is None or gid is None:
+            return [], clan_id, gid
+        appids = self.client.creator_apps(clan_id, gid, flavor="all")
+        return appids, clan_id, gid
 
     # ---------- 发行商匹配 ----------
 

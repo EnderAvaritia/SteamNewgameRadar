@@ -5,9 +5,21 @@
 # ---------------------------------------------------------------------------
 
 # 发行商监控线：监控这些发行商是否有新游戏发行（含"公布新游戏但无发售日"的情报跟踪）。
-# 每个元素是一个发行商名，用于精确匹配 appdetails 返回的 publishers[]（忽略大小写与首尾空白）。
+# 每个元素支持两种写法：
+#   1. 字符串（clan_account_id 自动从发行商主页解析）
+#      - 任天堂
+#   2. 映射（推荐）：显式给出 creator 查询参数，避免每次解析主页
+#      - name: 072projectx
+#        clan_account_id: 45479601                    # 发行商主页的 clanAccountID
+#        clan_announcement_gid: 509607220045941405    # 发行商主页"新发行/即将发行"tab URL 中的
+#                                                     # clanAnnouncementGID（主页无法自动解析，必填）
+# 获取方式：浏览器打开 https://store.steampowered.com/publisher/{发行商名}，
+# 点击"新发行"或"即将发行"tab，地址栏 URL 中的 clanAccountID 与
+# clanAnnouncementGID 就是这两个值。
 publishers:
-  - 任天堂          # 发行商名（用于匹配 appdetails.publishers[]）
+  - name: 072projectx
+    clan_account_id: 45479601
+    clan_announcement_gid: 509607220045941405
 
 # 游戏监控线：监控感兴趣的游戏是否临近发售 / 已发售。
 # 每个元素支持三种写法：
@@ -27,6 +39,10 @@ checkpoints: [+14, +7, -3]
 
 # 常驻模式（daemon）的检查间隔（小时）
 interval_hours: 6
+
+# Steam 商店区域代码（cc 参数），影响可见游戏与价格。默认 cn。
+# 注意：部分游戏在 cn 区不可见，发行商查询会因此漏掉锁区游戏；建议填你的实际区域（如 HK、US）。
+cc: HK
 
 # 通知渠道
 # ---------------------------------------------------------------------------

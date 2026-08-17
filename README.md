@@ -51,7 +51,12 @@ python -m venv .venv
 
 ```yaml
 publishers:
-  - 任天堂          # 发行商名，精确匹配 appdetails.publishers[]（忽略大小写/空白）
+  # 推荐：映射形式，显式给出 creator 查询参数（见 config.example.yaml 注释说明如何获取）
+  - name: 072projectx
+    clan_account_id: 45479601                 # 发行商主页的 clanAccountID
+    clan_announcement_gid: 509607220045941405 # 发行商主页"新发行/即将发行"tab 的 clanAnnouncementGID
+  # 简化形式：只写名字，clan_account_id 自动从发行商主页解析（gid 仍需显式配置）
+  - 任天堂
 
 games:
   - 黑神话悟空       # 游戏名（自动搜索解析为 appid）
@@ -59,11 +64,15 @@ games:
   - 1245620                  # 直接 appid
 ```
 
+发行商监控使用 **creator 精准查询**（`saleaction/ajaxgetsaledynamicappquery`）：对每个发行商按其 clan 账号拉取其「即将发行 + 最新已发售」游戏列表（每发行商 1~2 次请求），不再轮询商店全局列表——快且精准。
+
 ### 检查点
 
 ```yaml
 checkpoints: [+14, +7, -3]   # + = 发售前，- = 发售后；同一天跨多个检查点只发最近一个
 interval_hours: 6            # daemon 模式检查间隔（小时）
+cc: HK                       # Steam 商店区域代码（默认 cn；部分游戏 cn 区不可见，
+                             # 发行商查询会漏掉锁区游戏，建议填实际区域如 HK/US）
 ```
 
 ### 代理
@@ -178,8 +187,8 @@ python steam_monitor.py --db 自定义.db once
 
 ## 工作原理（简述）
 
-- Steam 免费 Storefront 接口（无需 Key）：`appdetails`（发售日/发行商/价格）、`search/results`（新发行/即将推出列表）、`storesearch`（名称搜索）。
-- 发行商监控：轮询新发行/即将推出列表 → 逐个查 appdetails → 匹配发行商字段 → 新游戏出现即提醒。
+- Steam 免费 Storefront 接口（无需 Key）：`appdetails`（发售日/发行商/价格）、`saleaction/ajaxgetsaledynamicappquery`（发行商 creator 查询）、`storesearch`（名称搜索）。
+- 发行商监控：对每个发行商按其 clan 账号精准拉取「即将发行 + 最新已发售」游戏列表 → 逐个查 appdetails → 新游戏出现即提醒。
 - 检查点：以发售日为中心，`+N` 天前 / `-N` 天后各提醒一次，SQLite 记录进度防重复；发售日变动自动重算。
 - 限流：请求间隔 1.5~2 秒，429/403 指数退避，403 停止本轮剩余请求。
 

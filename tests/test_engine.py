@@ -32,7 +32,8 @@ class TestProgressCallback:
     """§12.6-8：progress 回调覆盖各处理阶段。"""
 
     def test_progress_reports_stages(self, fake_client, state, fake_notifier):
-        fake_client.add_search_item(100, "popularnew", 1)
+        fake_client.set_publisher_creator("任天堂", 45479601, "GID1")
+        fake_client.add_creator_apps(45479601, [100])
         fake_client.add_appdetails(
             100, name="新作", publishers=["任天堂"], release_date_raw="Coming soon"
         )
@@ -44,8 +45,7 @@ class TestProgressCallback:
 
         joined = "\n".join(messages)
         assert "开始检查" in joined
-        assert "候选 1 个" in joined
-        assert "命中发行商「任天堂」" in joined
+        assert "发行商「任天堂」（clan 45479601）：候选 1 个" in joined
         assert "处理游戏 1/1" in joined
         assert "检查完成" in joined
 
@@ -57,10 +57,15 @@ class TestProgressCallback:
 
 
 class TestPublisherLine:
-    """§12.6-1：发行商新游戏出现 → 新游戏公布事件。"""
+    """§12.6-1：发行商新游戏出现 → 新游戏公布事件（creator 精准查询）。"""
+
+    def _setup_publisher(self, fake_client, clan_id=45479601, gid="GID1", name="任天堂"):
+        fake_client.set_publisher_creator(name, clan_id, gid)
+        return clan_id
 
     def test_new_publisher_game_fires_new_announcement(self, fake_client, state, fake_notifier):
-        fake_client.add_search_item(1245620, "popularnew", 1, name="测试新作")
+        self._setup_publisher(fake_client)
+        fake_client.add_creator_apps(45479601, [1245620])
         fake_client.add_appdetails(
             1245620,
             name="测试新作",
@@ -90,7 +95,8 @@ class TestPublisherLine:
 
     def test_new_publisher_game_with_date_enters_checkpoint_flow(self, fake_client, state, fake_notifier):
         today = D(2026, 8, 10)  # 距 8/21 还有 11 天 → 只有 +14 检查点跨越
-        fake_client.add_search_item(100, "popularnew", 1)
+        self._setup_publisher(fake_client)
+        fake_client.add_creator_apps(45479601, [100])
         fake_client.add_appdetails(100, name="新作", publishers=["任天堂"],
                                    release_date_raw="21 Aug, 2026", coming_soon=True)
         config = make_config(publishers=["任天堂"])
@@ -105,16 +111,28 @@ class TestPublisherLine:
         record = state.get_game(100)
         assert record.last_triggered == 0  # +14 检查点已触发
 
-    def test_publisher_mismatch_ignored(self, fake_client, state, fake_notifier):
-        fake_client.add_search_item(100, "popularnew", 1)
-        fake_client.add_appdetails(100, name="索尼游戏", publishers=["Sony"], release_date_raw="Coming soon")
+    def test_explicit_clan_account_id_no_page_lookup(self, fake_client, state, fake_notifier):
+        # 配置显式给 clan_account_id + clan_announcement_gid → 不请求发行商主页
+        fake_client.add_creator_apps(999, [100])
+        fake_client.add_appdetails(100, name="新作", release_date_raw="21 Aug, 2026", coming_soon=True)
+        config = make_config(publishers=["任天堂"])
+        config.publishers[0].clan_account_id = 999
+        config.publishers[0].clan_announcement_gid = "GID1"
+        run(fake_client, config, state, fake_notifier)
+        assert "creatorpage:任天堂" not in fake_client.calls  # 未解析主页
+        assert state.get_game(100) is not None
+
+    def test_missing_gid_warns(self, fake_client, state, fake_notifier):
+        # 主页只能解析 clan_id，gid 缺失 → 警告提示显式配置
+        fake_client.set_publisher_creator("任天堂", 45479601)  # 无 gid
         config = make_config(publishers=["任天堂"])
         ctx = run(fake_client, config, state, fake_notifier)
         assert ctx.events == []
-        assert state.get_game(100) is None
+        assert any("缺少 creator 查询参数" in w for w in ctx.warnings)
 
     def test_non_game_type_skipped(self, fake_client, state, fake_notifier):
-        fake_client.add_search_item(100, "popularnew", 1)
+        self._setup_publisher(fake_client)
+        fake_client.add_creator_apps(45479601, [100])
         fake_client.add_appdetails(100, name="某 DLC", type="dlc", publishers=["任天堂"])
         config = make_config(publishers=["任天堂"])
         ctx = run(fake_client, config, state, fake_notifier)
@@ -122,7 +140,8 @@ class TestPublisherLine:
         assert state.get_game(100) is None
 
     def test_publisher_game_not_reannounced_on_second_run(self, fake_client, state, fake_notifier):
-        fake_client.add_search_item(100, "popularnew", 1)
+        self._setup_publisher(fake_client)
+        fake_client.add_creator_apps(45479601, [100])
         fake_client.add_appdetails(100, name="新作", publishers=["任天堂"], release_date_raw="Coming soon")
         config = make_config(publishers=["任天堂"])
         run(fake_client, config, state, fake_notifier)
@@ -241,12 +260,6 @@ class TestBlocked:
             def __init__(self):
                 self.details_calls = []
 
-            def search_results(self, filter_name, page=1, count=50):
-                # 只有 popularnew 第 1 页返回一个候选，其余为空
-                if filter_name == "popularnew" and page == 1:
-                    return [{"name": "候选", "logo": "https://x/steam/apps/100/logo.png"}]
-                return []
-
             def get_appdetails(self, appid):
                 self.details_calls.append(appid)
                 raise SteamBlockedError("收到 HTTP 403 且重试耗尽，判定被封")
@@ -255,10 +268,10 @@ class TestBlocked:
                 return []
 
         client = BlockingClient()
-        config = make_config(games=["300"])
+        config = make_config(games=["300", "301"])
         ctx = run(client, config, state, fake_notifier)
-        # 403 后立即停止：候选 100 请求失败后，游戏线 300 不再请求
-        assert client.details_calls == [100]
+        # 403 后立即停止：300 请求失败后，301 不再请求
+        assert client.details_calls == [300]
         assert any("403" in w or "被限制" in w for w in ctx.warnings)
         assert fake_notifier.sent_contexts == [ctx]  # 报告仍生成
 

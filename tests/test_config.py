@@ -50,7 +50,8 @@ report_dir: reports
 """,
         )
         config = load_config(path)
-        assert config.publishers == ["任天堂"]
+        assert [p.name for p in config.publishers] == ["任天堂"]
+        assert all(p.clan_account_id is None for p in config.publishers)
         assert config.games == ["黑神话悟空", "app/1245620/ELDEN_RING", "1245620"]
         assert config.checkpoints == [14, 7, -3]
         assert config.interval_hours == 6.0
@@ -109,6 +110,57 @@ notify:
         config = load_config(path)
         assert config.template_title == "{game_name}"
         assert config.template_content == "{stage}\n{store_url}"
+
+
+class TestPublishers:
+    def test_string_form_auto_resolve(self, tmp_path):
+        path = write_config(tmp_path, "publishers:\n  - 任天堂\n")
+        config = load_config(path)
+        assert len(config.publishers) == 1
+        assert config.publishers[0].name == "任天堂"
+        assert config.publishers[0].clan_account_id is None
+
+    def test_mapping_form_with_clan_id(self, tmp_path):
+        path = write_config(
+            tmp_path,
+            "publishers:\n  - name: 072projectx\n    clan_account_id: 45479601\n",
+        )
+        config = load_config(path)
+        assert config.publishers[0].name == "072projectx"
+        assert config.publishers[0].clan_account_id == 45479601
+
+    def test_mixed_forms(self, tmp_path):
+        path = write_config(
+            tmp_path,
+            "publishers:\n  - 任天堂\n  - name: X\n    clan_account_id: 123\n",
+        )
+        config = load_config(path)
+        assert config.publishers[0].name == "任天堂"
+        assert config.publishers[1].name == "X"
+        assert config.publishers[1].clan_account_id == 123
+
+    def test_mapping_without_name_raises(self, tmp_path):
+        path = write_config(tmp_path, "publishers:\n  - clan_account_id: 123\n")
+        with pytest.raises(ConfigError):
+            load_config(path)
+
+    def test_gid_as_yaml_number(self, tmp_path):
+        # YAML 纯数字字面量解析为 int，应自动转字符串
+        path = write_config(
+            tmp_path,
+            "publishers:\n  - name: X\n    clan_account_id: 123\n"
+            "    clan_announcement_gid: 509607220045941405\n",
+        )
+        config = load_config(path)
+        assert config.publishers[0].clan_account_id == 123
+        assert config.publishers[0].clan_announcement_gid == "509607220045941405"
+
+    def test_invalid_clan_id_raises(self, tmp_path):
+        path = write_config(
+            tmp_path, "publishers:\n  - name: X\n    clan_account_id: -5\n"
+        )
+        with pytest.raises(ConfigError):
+            load_config(path)
 
 
 class TestProxy:

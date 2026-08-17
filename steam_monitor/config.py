@@ -27,6 +27,7 @@ class ConfigError(Exception):
 DEFAULT_CHECKPOINTS = [14, 7, -3]
 DEFAULT_INTERVAL_HOURS = 6.0
 DEFAULT_REPORT_DIR = "reports"
+DEFAULT_CC = "cn"
 
 #: 内置默认模板（§8.2 模板回退链的最后一环）
 BUILTIN_TITLE = "{game_name}"
@@ -47,10 +48,26 @@ class Channel:
 
 
 @dataclass
+class Publisher:
+    """一个被监控的发行商。
+
+    - ``clan_account_id``：发行商 clan 账号 ID（发行商主页的 ``clanAccountID``）。
+      为 None 时由脚本从 ``store.steampowered.com/publisher/{name}`` 主页自动解析。
+    - ``clan_announcement_gid``：creator 查询接口必需的公告 GID（发行商主页
+      "新发行/即将发行" tab 的 ``clanAnnouncementGID`` 参数）。主页无法自动解析，
+      建议显式填写。
+    """
+
+    name: str
+    clan_account_id: int | None = None
+    clan_announcement_gid: str | None = None
+
+
+@dataclass
 class Config:
     """规范化后的完整配置。"""
 
-    publishers: list[str] = field(default_factory=list)
+    publishers: list[Publisher] = field(default_factory=list)
     games: list[str] = field(default_factory=list)
     checkpoints: list[int] = field(default_factory=lambda: list(DEFAULT_CHECKPOINTS))
     interval_hours: float = DEFAULT_INTERVAL_HOURS
@@ -58,6 +75,7 @@ class Config:
     channels: list[Channel] = field(default_factory=list)
     report_dir: Path = Path(DEFAULT_REPORT_DIR)
     proxy: dict[str, str] | None = None
+    cc: str = DEFAULT_CC
     source_path: str = "config.yaml"
 
     @property
@@ -93,13 +111,14 @@ def load_config(path: str | Path) -> Config:
 
 
 def _build_config(raw: dict[str, Any], path: Path) -> Config:
-    publishers = _string_list(raw.get("publishers"), "publishers")
+    publishers = _publishers(raw.get("publishers"))
     games = _string_list(raw.get("games"), "games")
     checkpoints = _checkpoints(raw.get("checkpoints"))
     interval = _interval_hours(raw.get("interval_hours"))
     default_template, channels = _parse_notify(raw.get("notify"))
     report_dir = Path(str(raw.get("report_dir") or DEFAULT_REPORT_DIR))
     proxy = _proxy(raw.get("proxy"))
+    cc = _cc(raw.get("cc"))
     return Config(
         publishers=publishers,
         games=games,
@@ -109,8 +128,18 @@ def _build_config(raw: dict[str, Any], path: Path) -> Config:
         channels=channels,
         report_dir=report_dir,
         proxy=proxy,
+        cc=cc,
         source_path=str(path),
     )
+
+
+def _cc(value: Any) -> str:
+    """区域代码（Steam cc 参数，如 cn / HK / US），默认 cn。"""
+    if value is None:
+        return DEFAULT_CC
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigError("cc 必须是区域代码字符串（如 cn / HK / US）")
+    return value.strip().upper()
 
 
 def _proxy(value: Any) -> dict[str, str] | None:
@@ -130,6 +159,48 @@ def _proxy(value: Any) -> dict[str, str] | None:
                 result[key] = item.strip()
         return result or None
     raise ConfigError("proxy 必须是 URL 字符串，或包含 http/https 的映射")
+
+
+def _publishers(value: Any) -> list[Publisher]:
+    """解析 publishers 段：支持字符串（自动解析 clan id）或映射（显式给参数）。
+
+    - ``- 任天堂``            → Publisher("任天堂", None, None)
+    - ``- name: X, clan_account_id: 123, clan_announcement_gid: "456"`` → 显式配置
+    """
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ConfigError("publishers 必须是列表（字符串或 name/clan_account_id 映射）")
+    result: list[Publisher] = []
+    for item in value:
+        if isinstance(item, str):
+            name = item.strip()
+            if not name:
+                continue
+            result.append(Publisher(name=name))
+        elif isinstance(item, dict):
+            name = item.get("name")
+            if not isinstance(name, str) or not name.strip():
+                raise ConfigError("publishers 映射项必须包含非空 name 字段")
+            clan = item.get("clan_account_id")
+            gid = item.get("clan_announcement_gid")
+            publisher = Publisher(name=name.strip())
+            if clan is not None:
+                if not isinstance(clan, int) or isinstance(clan, bool) or clan <= 0:
+                    raise ConfigError(f"publishers「{name}」的 clan_account_id 必须是正整数")
+                publisher.clan_account_id = clan
+            if gid is not None:
+                if isinstance(gid, str) and gid.strip():
+                    publisher.clan_announcement_gid = gid.strip()
+                elif isinstance(gid, int) and not isinstance(gid, bool) and gid > 0:
+                    # YAML 纯数字字面量会被解析为 int
+                    publisher.clan_announcement_gid = str(gid)
+                else:
+                    raise ConfigError(f"publishers「{name}」的 clan_announcement_gid 必须是数字或字符串")
+            result.append(publisher)
+        else:
+            raise ConfigError("publishers 每项必须是字符串或 name/clan_account_id 映射")
+    return result
 
 
 def _string_list(value: Any, name: str) -> list[str]:

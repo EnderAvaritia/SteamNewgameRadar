@@ -10,7 +10,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from steam_monitor.config import Config, Channel  # noqa: E402
+from steam_monitor.config import Channel, Config, Publisher  # noqa: E402
 from steam_monitor.notifier import Notifier  # noqa: E402
 from steam_monitor.state import State  # noqa: E402
 from steam_monitor.steam_api import AppDetails  # noqa: E402
@@ -27,6 +27,9 @@ class FakeSteamClient:
         self.appdetails: dict[int, AppDetails | None] = {}
         self.search_items: dict[tuple[str, int], list[dict]] = {}
         self.store_search_items: dict[str, list[dict]] = {}
+        self.creator_appids: dict[int, list[int]] = {}
+        self.publisher_clan_ids: dict[str, int] = {}
+        self.publisher_gids: dict[str, str] = {}
         self.calls: list[str] = []
 
     # -- 接口实现 --
@@ -41,6 +44,21 @@ class FakeSteamClient:
     def store_search(self, term: str):
         self.calls.append(f"storesearch:{term}")
         return self.store_search_items.get(term, [])
+
+    def creator_apps(
+        self,
+        clan_account_id: int,
+        clan_announcement_gid: str,
+        flavor: str = "all",
+        count: int = 50,
+        max_pages: int = 1,
+    ):
+        self.calls.append(f"creator:{clan_account_id}:{clan_announcement_gid}")
+        return list(self.creator_appids.get(clan_account_id, []))
+
+    def publisher_creator_params(self, name: str):
+        self.calls.append(f"creatorpage:{name}")
+        return self.publisher_clan_ids.get(name), self.publisher_gids.get(name)
 
     # -- 便捷构造 --
     def add_appdetails(self, appid: int, **kwargs):
@@ -68,6 +86,14 @@ class FakeSteamClient:
         item = {"type": item_type, "id": appid, "name": name or term}
         self.store_search_items.setdefault(term, []).append(item)
 
+    def add_creator_apps(self, clan_account_id: int, appids: list[int], flavor: str = "all"):
+        self.creator_appids.setdefault(clan_account_id, []).extend(appids)
+
+    def set_publisher_creator(self, name: str, clan_account_id: int, gid: str | None = None):
+        self.publisher_clan_ids[name] = clan_account_id
+        if gid is not None:
+            self.publisher_gids[name] = gid
+
 
 @pytest.fixture
 def fake_client() -> FakeSteamClient:
@@ -88,8 +114,15 @@ def make_config(
     default_template=None,
     report_dir="reports",
 ) -> Config:
+    if publishers is None:
+        publisher_list: list[Publisher] = []
+    else:
+        publisher_list = [
+            p if isinstance(p, Publisher) else Publisher(name=str(p))
+            for p in publishers
+        ]
     return Config(
-        publishers=list(publishers or []),
+        publishers=publisher_list,
         games=list(games or []),
         checkpoints=list(checkpoints if checkpoints is not None else [14, 7, -3]),
         interval_hours=float(interval_hours if interval_hours is not None else 6.0),

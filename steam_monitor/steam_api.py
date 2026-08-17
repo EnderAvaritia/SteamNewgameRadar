@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import random
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
@@ -32,12 +33,22 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
+#: 发行商主页 HTML 中 clanAccountID 的常见形态（HTML 实体引号 &quot;）
+_CLAN_ID_PATTERNS = re.compile(r'clanAccountID&quot;:(\d+)')
+#: creator-home-event 的 gidEvent
+_GID_PATTERNS = re.compile(r'gidEvent&quot;:&quot;(\d+)&quot;')
+
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 )
 
 BASE_URL = "https://store.steampowered.com"
+
+#: 发行商 creator 查询接口（按 clanAccountID 拉取该发行商全部游戏，一次一页）
+CREATOR_QUERY_URL = BASE_URL + "/saleaction/ajaxgetsaledynamicappquery"
+#: 发行商主页（HTML，用于解析 clanAccountID）
+PUBLISHER_PAGE_URL = BASE_URL + "/publisher/{name}"
 
 DEFAULT_CONNECT_TIMEOUT = 10.0
 DEFAULT_READ_TIMEOUT = 30.0
@@ -202,11 +213,13 @@ class SteamClient:
         base_url: str = BASE_URL,
         limiter: RateLimiter | None = None,
         proxies: dict[str, str] | None = None,
+        cc: str = "cn",
     ):
         self.session = session if session is not None else requests.Session()
         if proxies:
             self.session.proxies.update(proxies)
         self.base_url = base_url.rstrip("/")
+        self.cc = (cc or "cn").strip().upper() or "cn"
         self.limiter = limiter if limiter is not None else RateLimiter(self.session)
 
     # ---------- §5.1 appdetails ----------
@@ -215,7 +228,7 @@ class SteamClient:
         """获取单个 appid 的详情；下架/失败（success=false 或 data=null）返回 None。"""
         url = (
             f"{self.base_url}/api/appdetails"
-            f"?appids={appid}&cc=cn&l=schinese"
+            f"?appids={appid}&cc={self.cc}&l=schinese"
         )
         resp = self.limiter.request("GET", url)
         if resp.status_code != 200:
@@ -238,7 +251,7 @@ class SteamClient:
         """获取新发行/即将推出列表中的一项。失败时返回空列表。"""
         url = (
             f"{self.base_url}/search/results/?json=1"
-            f"&filter={filter_name}&sort_by=Released_DESC&cc=cn&l=schinese"
+            f"&filter={filter_name}&sort_by=Released_DESC&cc={self.cc}&l=schinese"
             f"&count={count}&page={page}"
         )
         resp = self.limiter.request("GET", url)
@@ -261,7 +274,7 @@ class SteamClient:
         """按名称搜索商店，用于游戏名 → appid 解析。失败时返回空列表。"""
         url = (
             f"{self.base_url}/api/storesearch/?term={quote(term)}"
-            f"&cc=cn&l=schinese"
+            f"&cc={self.cc}&l=schinese"
         )
         resp = self.limiter.request("GET", url)
         if resp.status_code != 200:
@@ -276,3 +289,99 @@ class SteamClient:
         if not isinstance(items, list):
             return []
         return [item for item in items if isinstance(item, dict)]
+
+    # ---------- 发行商 creator 查询（§5.2） ----------
+
+    def creator_apps(
+        self,
+        clan_account_id: int,
+        clan_announcement_gid: str,
+        flavor: str = "all",
+        count: int = 50,
+        max_pages: int = 1,
+    ) -> list[int]:
+        """按发行商 clan 账号拉取其游戏 appid 列表（§5.2 精准查询）。
+
+        ``flavor=all`` 返回「即将发行 + 最新已发售」混排（upcoming 优先），
+        一次请求即覆盖「发行商新游戏」两种形态。分页直到 possible_has_more=False
+        或达到 max_pages。失败返回空列表。
+        """
+        appids: list[int] = []
+        seen: set[int] = set()
+        start = 0
+        for _ in range(max_pages):
+            url = self._creator_query_url(clan_account_id, clan_announcement_gid, flavor, start, count)
+            resp = self.limiter.request("GET", url)
+            if resp.status_code != 200:
+                raise SteamHTTPError(
+                    f"creator 查询失败（HTTP {resp.status_code}）：clan={clan_account_id}，"
+                    f"请检查 clan_account_id / clan_announcement_gid 配置是否正确",
+                    status_code=resp.status_code,
+                    url=url,
+                )
+            try:
+                payload = resp.json()
+            except ValueError as exc:
+                raise SteamRequestError(f"creator 查询返回非 JSON：clan={clan_account_id}：{exc}") from exc
+            if not isinstance(payload, dict) or payload.get("success") != 1:
+                raise SteamRequestError(
+                    f"creator 查询 success!=1：clan={clan_account_id}（响应异常）"
+                )
+            page_appids = payload.get("appids") or []
+            for appid in page_appids:
+                if isinstance(appid, int) and appid not in seen:
+                    seen.add(appid)
+                    appids.append(appid)
+            if not payload.get("possible_has_more"):
+                break
+            start += count
+        return appids
+
+    def _creator_query_url(
+        self,
+        clan_account_id: int,
+        clan_announcement_gid: str,
+        flavor: str,
+        start: int,
+        count: int,
+    ) -> str:
+        """构造发行商 creator 查询 URL（参数对齐发行商主页实际请求）。"""
+        facet = "%7B%22type%22:7,%22value%22:%22game%22%7D"  # {"type":7,"value":"game"}
+        return (
+            f"{self.base_url}/saleaction/ajaxgetsaledynamicappquery"
+            f"?cc={self.cc}&l=schinese"
+            f"&clanAccountID={clan_account_id}"
+            f"&clanAnnouncementGID={clan_announcement_gid}"
+            f"&flavor={flavor}"
+            f"&strFacetFilter={facet}"
+            f"&start={start}&count={count}"
+            f"&sectionuniqueid=100009"
+            f"&return_capsules=true"
+            f"&origin=https:%2F%2Fstore.steampowered.com"
+            f"&bContentHubDiscountedOnly=false"
+            f"&strTabFilter="
+            f"&bRequestFacetCounts=true"
+            f"&bUseCreatorHomeApps=true"
+            f"&bAllowDemos=true"
+        )
+
+    def publisher_creator_params(self, name: str) -> tuple[int | None, str | None]:
+        """解析发行商主页 HTML 中的 creator 查询参数。
+
+        返回 ``(clan_account_id, gid_event)``；gid_event 为主页「creator-home-event」
+        事件 ID，通常不能直接用作 clanAnnouncementGID（两者差 1），建议显式配置。
+        解析失败对应值为 None。
+        """
+        url = PUBLISHER_PAGE_URL.format(name=quote(name))
+        resp = self.limiter.request("GET", url)
+        if resp.status_code != 200:
+            logger.warning("发行商主页非 200（%s）：%s", resp.status_code, name)
+            return None, None
+        text = resp.text
+        clan_match = _CLAN_ID_PATTERNS.search(text)
+        gid_match = _GID_PATTERNS.search(text)
+        clan_id = int(clan_match.group(1)) if clan_match else None
+        gid = gid_match.group(1) if gid_match else None
+        if clan_id is None:
+            logger.warning("发行商主页未找到 clanAccountID：%s", name)
+        return clan_id, gid

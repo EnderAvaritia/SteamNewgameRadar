@@ -34,7 +34,11 @@ python steam_monitor.py status   # 查看 SQLite 中当前跟踪的游戏与已�
 ```yaml
 # 监控对象
 publishers:
-  - 任天堂          # 发行商名（用于匹配 appdetails.publishers[]）
+  # 推荐：映射形式，显式给出 creator 查询参数
+  - name: 072projectx
+    clan_account_id: 45479601                  # 发行商主页的 clanAccountID
+    clan_announcement_gid: 509607220045941405  # 发行商主页 tab URL 的 clanAnnouncementGID（必填）
+  - 任天堂            # 简化形式：clan_account_id 自动从发行商主页解析（gid 仍需显式配置）
 
 games:
   - 黑神话悟空       # 游戏名（自动解析为 appid）
@@ -46,6 +50,10 @@ checkpoints: [+14, +7, -3]
 
 # 常驻模式间隔（小时）
 interval_hours: 6
+
+# Steam 商店区域代码（cc 参数），影响可见游戏与价格；默认 cn。
+# 部分游戏在 cn 区不可见，发行商查询会漏掉锁区游戏；建议填实际区域（如 HK / US）。
+cc: HK
 
 # 通知渠道（可为空列表 = 仅报告文件）
 notify:
@@ -85,13 +93,23 @@ report_dir: reports
   - `data.price_overview.final` / `is_free` — 价格（分为单位）
 - `data` 为 null / `success` 为 false 时：跳过该 appid 并记录警告（游戏下架或被移除）。
 
-### 5.2 发行商新游戏发现
-- `GET https://store.steampowered.com/search/results/?json=1&filter=popularnew&sort_by=Released_DESC&cc=cn&l=schinese&count=50`
-  - `filter`：`popularnew`（新发行）、`comingsoon`（即将推出）、`popularcomingsoon`；三者都要轮询
-  - 返回 `items[]`（含 `name`、`logo`/`tiny_image` 图片 URL，appid 从 URL 中 `steam/apps/(\d+)` 提取）
-  - JSON items **不含发售日与发行商** → 需对每个候选 appid 调 appdetails 补全
-- 流程：轮询 3 个 filter 列表（每个翻页若干页，单次 count=50，翻页到 2~3 页足够）→ 对列表里每个 appid 调 appdetails → 取 `publishers[]` → **精确匹配（忽略大小写与首尾空白）**配置中的发行商名 → 命中者进入发行商监控线。
-- 发行商命中且该 appid 此前未知 → 触发"新游戏公布"事件（有/无发售日都要）。
+### 5.2 发行商新游戏发现（creator 精准查询）
+
+- 核心接口：`GET https://store.steampowered.com/saleaction/ajaxgetsaledynamicappquery`
+  - 关键参数：`clanAccountID`（发行商 clan 账号）、`clanAnnouncementGID`（**必填**，缺失返回 500）、
+    `flavor=all`（返回「即将发行 + 最新已发售」混排，upcoming 优先，一次覆盖两种形态）、
+    `strFacetFilter={"type":7,"value":"game"}`（只取 game）、`start`/`count` 分页、
+    `bUseCreatorHomeApps=true`
+  - 响应 `appids[]` 直接返回 appid 列表；`possible_has_more` 指示是否还有下一页
+- 参数来源：
+  - `clanAccountID`：可显式配置，或从 `https://store.steampowered.com/publisher/{name}` 主页
+    HTML 中 `data-props="{&quot;clanAccountID&quot;:...}"` 自动解析
+  - `clanAnnouncementGID`：主页 **无法可靠解析**（主页 `gidEvent` 与所需 GID 相差 1，如
+    404 vs 405），必须显式配置（从发行商主页"新发行/即将发行"tab 的地址栏 URL 获取）
+- 流程：对每个被监控的发行商 → 按其 clan 参数拉取 appid 列表（flavor=all 第一页 50 个即覆盖
+  upcoming + 最新已发售）→ 对每个 appid 调 appdetails 补全发售日/价格 → 进入检查点流程。
+- 发行商查询返回的 appid 天然属于该发行商，无需再匹配 publishers[] 字段。
+- 发行商出现此前未知的 appid → 触发"新游戏公布"事件（有/无发售日都要）。
 
 ### 5.3 游戏监控线
 - 配置中的 games 解析为 appid（名称→`/api/storesearch` 搜索取第一个 `game` 类型结果；URL→提取数字；数字→直接使用）。
@@ -103,7 +121,7 @@ report_dir: reports
 - 所有 Steam HTTP 请求**串行**，间隔 **1.5~2 秒**（全局请求节流器）。
 - 收到 HTTP 429 / 403：指数退避（1.5s 起步 ×2，上限 60s），重试最多 3 次；403 视为被封，停止本轮剩余 Steam 请求并提示。
 - 超时：连接 10s、读取 30s。所有请求设置 UA（`Mozilla/5.0` 风格）。
-- 设计容量：发现列表（3 filter × 2 页 ≈ 300 请求）+ 关注游戏（数十个）≈ 1 次 run 在 8~10 分钟内完成，安全。
+- 设计容量：发行商线（每发行商 1~2 次 creator 请求 + 50 个 appdetails ≈ 2 分钟）+ 关注游戏（数十个）≈ 1 次 run 在 3~4 分钟内完成，安全。
 
 ## 6. 发售日解析（防御性）
 

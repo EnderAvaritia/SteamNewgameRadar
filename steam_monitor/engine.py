@@ -88,23 +88,34 @@ def run_check(
         f"检查点 {config.checkpoints}"
     )
 
-    # ---------- §5.2 发行商监控线 ----------
-    try:
-        candidates = resolver.discover_publisher_candidates()
-    except SteamBlockedError as exc:
-        ctx.warnings.append(f"Steam 请求被限制（403），停止本轮剩余请求：{exc}")
-        blocked = True
-    except SteamRequestError as exc:
-        ctx.warnings.append(f"发行商候选列表获取失败：{exc}")
-        candidates = []
-    else:
-        _log(f"发行商发现：轮询完成，候选 {len(candidates)} 个")
-        total = len(candidates)
-        for i, appid in enumerate(candidates, start=1):
+    # ---------- §5.2 发行商监控线（creator 精准查询） ----------
+    for publisher in config.publishers:
+        if blocked:
+            break
+        try:
+            appids, clan_id, gid = resolver.discover_creator_appids(publisher)
+        except SteamBlockedError as exc:
+            ctx.warnings.append(f"Steam 请求被限制（403），停止本轮剩余请求：{exc}")
+            blocked = True
+            break
+        except SteamRequestError as exc:
+            ctx.warnings.append(f"发行商「{publisher.name}」候选获取失败：{exc}")
+            continue
+        if clan_id is None or gid is None:
+            ctx.warnings.append(
+                f"发行商「{publisher.name}」：缺少 creator 查询参数"
+                f"（clan_account_id={'有' if clan_id else '无'}，"
+                f"clan_announcement_gid={'有' if gid else '无'}；"
+                f"后者主页无法自动解析，请在配置中显式填写）"
+            )
+            continue
+        _log(f"发行商「{publisher.name}」（clan {clan_id}）：候选 {len(appids)} 个")
+        total = len(appids)
+        for i, appid in enumerate(appids, start=1):
             if blocked:
                 break
             if i % 10 == 0 or i == total:
-                _log(f"发行商候选处理 {i}/{total}")
+                _log(f"发行商「{publisher.name}」候选处理 {i}/{total}")
             try:
                 details = client.get_appdetails(appid)
             except SteamBlockedError as exc:
@@ -119,20 +130,17 @@ def run_check(
                 continue
             if details.type != "game":
                 continue
-            matched = resolver.match_publisher(details.publishers, config.publishers)
-            if matched is not None:
-                _log(f"命中发行商「{matched}」：{details.name}（appid {appid}）")
-                _process_game(
-                    ctx=ctx,
-                    appid=appid,
-                    details=details,
-                    source="publisher",
-                    publisher_match=matched,
-                    config=config,
-                    state=state,
-                    today=_today,
-                    now_iso=_now().isoformat(timespec="seconds"),
-                )
+            _process_game(
+                ctx=ctx,
+                appid=appid,
+                details=details,
+                source="publisher",
+                publisher_match=publisher.name,
+                config=config,
+                state=state,
+                today=_today,
+                now_iso=_now().isoformat(timespec="seconds"),
+            )
 
     # ---------- §5.3 游戏监控线 ----------
     if not blocked:
