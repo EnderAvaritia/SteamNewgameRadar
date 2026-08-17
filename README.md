@@ -1,4 +1,4 @@
-# Steam 新游戏监控
+# SteamNewgameRadar · Steam 新游戏监控（新游雷达）
 
 监控 Steam 新游戏上线的 Python 脚本。两条监控线，一套引擎：
 
