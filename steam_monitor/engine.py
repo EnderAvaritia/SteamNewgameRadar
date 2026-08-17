@@ -63,11 +63,13 @@ def run_check(
     state: State,
     notifier: Notifier,
     now: Callable[[], datetime] | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> RunContext:
     """执行一轮完整检查：两条监控线 → 事件 → 通知 + 报告。
 
     - ``today`` 可传 date 或返回 date 的可调用对象（测试注入时钟）。
     - ``now`` 默认 ``datetime.now``，可注入固定时间。
+    - ``progress`` 可选进度回调，每处理一个阶段调用一次（CLI 接入打印输出）。
     - 403 封禁（SteamBlockedError）→ 停止本轮剩余 Steam 请求，仍生成报告。
     """
     _today = today() if callable(today) else today
@@ -76,6 +78,15 @@ def run_check(
     ctx = RunContext(started_at=started)
     resolver = Resolver(client)
     blocked = False
+
+    def _log(msg: str) -> None:
+        if progress is not None:
+            progress(msg)
+
+    _log(
+        f"开始检查：发行商 {len(config.publishers)} 个，游戏 {len(config.games)} 个，"
+        f"检查点 {config.checkpoints}"
+    )
 
     # ---------- §5.2 发行商监控线 ----------
     try:
@@ -87,9 +98,13 @@ def run_check(
         ctx.warnings.append(f"发行商候选列表获取失败：{exc}")
         candidates = []
     else:
-        for appid in candidates:
+        _log(f"发行商发现：轮询完成，候选 {len(candidates)} 个")
+        total = len(candidates)
+        for i, appid in enumerate(candidates, start=1):
             if blocked:
                 break
+            if i % 10 == 0 or i == total:
+                _log(f"发行商候选处理 {i}/{total}")
             try:
                 details = client.get_appdetails(appid)
             except SteamBlockedError as exc:
@@ -106,6 +121,7 @@ def run_check(
                 continue
             matched = resolver.match_publisher(details.publishers, config.publishers)
             if matched is not None:
+                _log(f"命中发行商「{matched}」：{details.name}（appid {appid}）")
                 _process_game(
                     ctx=ctx,
                     appid=appid,
@@ -120,7 +136,9 @@ def run_check(
 
     # ---------- §5.3 游戏监控线 ----------
     if not blocked:
-        for entry in config.games:
+        total_games = len(config.games)
+        for i, entry in enumerate(config.games, start=1):
+            _log(f"处理游戏 {i}/{total_games}：{entry}")
             try:
                 appid = resolver.resolve_game_entry(entry)
             except SteamBlockedError as exc:
@@ -164,8 +182,13 @@ def run_check(
     pruned = state.prune_released(_today)
     if pruned:
         logger.info("已归档清理 %d 个发售超过 30 天的游戏", pruned)
+        _log(f"已清理 {pruned} 个发售超过 30 天的游戏")
 
     ctx.duration = (_now() - started).total_seconds()
+    _log(
+        f"检查完成：事件 {len(ctx.events)} 条，警告 {len(ctx.warnings)} 条，"
+        f"耗时 {ctx.duration:.1f} 秒"
+    )
     notifier.send(ctx)
     return ctx
 

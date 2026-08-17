@@ -16,7 +16,7 @@ from tests.conftest import FIXED_NOW, FIXED_TODAY, make_config
 D = date
 
 
-def run(client, config, state, notifier, today=FIXED_TODAY):
+def run(client, config, state, notifier, today=FIXED_TODAY, progress=None):
     return run_check(
         client=client,
         today=today,
@@ -24,7 +24,36 @@ def run(client, config, state, notifier, today=FIXED_TODAY):
         state=state,
         notifier=notifier,
         now=lambda: FIXED_NOW,
+        progress=progress,
     )
+
+
+class TestProgressCallback:
+    """§12.6-8：progress 回调覆盖各处理阶段。"""
+
+    def test_progress_reports_stages(self, fake_client, state, fake_notifier):
+        fake_client.add_search_item(100, "popularnew", 1)
+        fake_client.add_appdetails(
+            100, name="新作", publishers=["任天堂"], release_date_raw="Coming soon"
+        )
+        fake_client.add_appdetails(1245620, release_date_raw="21 Aug, 2026", coming_soon=True)
+        config = make_config(publishers=["任天堂"], games=["1245620"])
+
+        messages: list[str] = []
+        run(fake_client, config, state, fake_notifier, progress=messages.append)
+
+        joined = "\n".join(messages)
+        assert "开始检查" in joined
+        assert "候选 1 个" in joined
+        assert "命中发行商「任天堂」" in joined
+        assert "处理游戏 1/1" in joined
+        assert "检查完成" in joined
+
+    def test_progress_without_callback_is_safe(self, fake_client, state, fake_notifier):
+        fake_client.add_appdetails(1245620, release_date_raw="21 Aug, 2026", coming_soon=True)
+        config = make_config(games=["1245620"])
+        ctx = run(fake_client, config, state, fake_notifier, progress=None)
+        assert ctx is not None
 
 
 class TestPublisherLine:
