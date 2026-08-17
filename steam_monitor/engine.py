@@ -227,10 +227,12 @@ def _process_game(
     game_events: list[GameEvent] = []
 
     if is_new:
-        if source == "publisher":
+        if source == "publisher" and config.notify_on_first_seen:
             game_events.append(
                 _new_announcement_event(appid, details, publisher_match or "", parsed, today)
             )
+        # notify_on_first_seen=false：首次看到静默入库（建基线），
+        # 之后的发售日公布/变更/检查点通知照常（§10）
     else:
         _handle_date_change(prev, parsed, appid, details, publisher_match, today, game_events)
         # 日期变动 → 检查点按新日期重新计算

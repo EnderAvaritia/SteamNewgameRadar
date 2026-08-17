@@ -163,6 +163,23 @@ class TestPublishers:
             load_config(path)
 
 
+class TestNotifyOnFirstSeen:
+    def test_default_true(self, tmp_path):
+        path = write_config(tmp_path, "")
+        config = load_config(path)
+        assert config.notify_on_first_seen is True
+
+    def test_false_parsed(self, tmp_path):
+        path = write_config(tmp_path, "notify_on_first_seen: false\n")
+        config = load_config(path)
+        assert config.notify_on_first_seen is False
+
+    def test_invalid_raises(self, tmp_path):
+        path = write_config(tmp_path, "notify_on_first_seen: maybe\n")
+        with pytest.raises(ConfigError):
+            load_config(path)
+
+
 class TestProxy:
     def test_proxy_string_expands_to_both(self, tmp_path):
         path = write_config(tmp_path, "proxy: http://127.0.0.1:7890\n")

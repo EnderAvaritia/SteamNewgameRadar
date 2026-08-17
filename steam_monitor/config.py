@@ -77,6 +77,7 @@ class Config:
     proxy: dict[str, str] | None = None
     cc: str = DEFAULT_CC
     cookie: str | None = None
+    notify_on_first_seen: bool = True
     source_path: str = "config.yaml"
 
     @property
@@ -121,6 +122,7 @@ def _build_config(raw: dict[str, Any], path: Path) -> Config:
     proxy = _proxy(raw.get("proxy"))
     cc = _cc(raw.get("cc"))
     cookie = _cookie(raw.get("cookie"))
+    notify_on_first_seen = _bool(raw.get("notify_on_first_seen"), "notify_on_first_seen", default=True)
     return Config(
         publishers=publishers,
         games=games,
@@ -132,8 +134,18 @@ def _build_config(raw: dict[str, Any], path: Path) -> Config:
         proxy=proxy,
         cc=cc,
         cookie=cookie,
+        notify_on_first_seen=notify_on_first_seen,
         source_path=str(path),
     )
+
+
+def _bool(value: Any, name: str, default: bool) -> bool:
+    """布尔配置项解析；缺失用默认值，非法类型报错。"""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    raise ConfigError(f"{name} 必须是 true 或 false")
 
 
 def _cookie(value: Any) -> str | None:

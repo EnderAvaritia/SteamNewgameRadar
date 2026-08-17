@@ -113,6 +113,7 @@ def make_config(
     channels=None,
     default_template=None,
     report_dir="reports",
+    notify_on_first_seen=True,
 ) -> Config:
     if publishers is None:
         publisher_list: list[Publisher] = []
@@ -129,6 +130,7 @@ def make_config(
         channels=list(channels or []),
         default_template=default_template,
         report_dir=Path(report_dir),
+        notify_on_first_seen=notify_on_first_seen,
     )
 
 

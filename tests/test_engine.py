@@ -148,6 +148,33 @@ class TestPublisherLine:
         ctx2 = run(fake_client, config, state, fake_notifier)
         assert not any(e.event_type == NEW_ANNOUNCEMENT for e in ctx2.events)
 
+    def test_first_seen_silent_when_notify_on_first_seen_false(self, fake_client, state, fake_notifier):
+        # notify_on_first_seen=false：首次看到静默入库（建基线），不通知
+        self._setup_publisher(fake_client)
+        fake_client.add_creator_apps(45479601, [100])
+        fake_client.add_appdetails(100, name="新作", release_date_raw="Coming soon")
+        config = make_config(publishers=["任天堂"], notify_on_first_seen=False)
+        ctx = run(fake_client, config, state, fake_notifier)
+        assert ctx.events == []                     # 首次静默
+        assert state.get_game(100) is not None      # 但入库了
+
+        # 第二次运行仍不产生 new_announcement
+        ctx2 = run(fake_client, config, state, fake_notifier)
+        assert not any(e.event_type == NEW_ANNOUNCEMENT for e in ctx2.events)
+
+    def test_first_seen_silent_but_checkpoints_still_fire(self, fake_client, state, fake_notifier):
+        # 首次静默只影响"新游戏公布"，窗口内检查点仍正常触发
+        today = D(2026, 8, 14)
+        self._setup_publisher(fake_client)
+        fake_client.add_creator_apps(45479601, [100])
+        fake_client.add_appdetails(100, name="新作", release_date_raw="21 Aug, 2026", coming_soon=True)
+        config = make_config(publishers=["任天堂"], notify_on_first_seen=False)
+        ctx = run(fake_client, config, state, fake_notifier, today=today)
+        types = {e.event_type for e in ctx.events}
+        assert NEW_ANNOUNCEMENT not in types       # 无公布通知
+        assert CHECKPOINT in types                  # 但检查点照常
+        assert state.get_game(100).last_triggered == 1
+
 
 class TestGameLine:
     """§12.6-2：无日期跟踪 → 公布日期 → date_announced。"""
