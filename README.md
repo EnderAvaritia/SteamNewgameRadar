@@ -66,6 +66,20 @@ checkpoints: [+14, +7, -3]   # + = 发售前，- = 发售后；同一天跨多�
 interval_hours: 6            # daemon 模式检查间隔（小时）
 ```
 
+### 代理
+
+访问 Steam 或推送通知需要代理时配置（同时作用于两者）：
+
+```yaml
+proxy: http://127.0.0.1:7890        # http/https 同用一个
+# 或分别指定：
+# proxy:
+#   http: http://127.0.0.1:7890
+#   https: socks5h://127.0.0.1:7890
+```
+
+不配置（保持 `proxy:` 为空）则直连。
+
 ### 通知渠道
 
 `notify.default` 为全局默认模板（可选），`notify.channels` 为渠道列表（可为空 = 仅报告文件）。

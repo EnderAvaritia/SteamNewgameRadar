@@ -126,12 +126,15 @@ class Notifier:
                 try:
                     title = safe_format(title_template, variables)
                     content = safe_format(content_template, variables)
-                    self._notify_func(
+                    kwargs: dict[str, Any] = dict(
                         provider=channel.provider,
                         title=title,
                         content=content,
                         **channel.params,
                     )
+                    if self.config.proxy:
+                        kwargs["proxies"] = self.config.proxy
+                    self._notify_func(**kwargs)
                     result.sent += 1
                 except Exception as exc:
                     result.failed += 1

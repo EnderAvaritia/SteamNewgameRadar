@@ -201,8 +201,11 @@ class SteamClient:
         session: requests.Session | None = None,
         base_url: str = BASE_URL,
         limiter: RateLimiter | None = None,
+        proxies: dict[str, str] | None = None,
     ):
         self.session = session if session is not None else requests.Session()
+        if proxies:
+            self.session.proxies.update(proxies)
         self.base_url = base_url.rstrip("/")
         self.limiter = limiter if limiter is not None else RateLimiter(self.session)
 

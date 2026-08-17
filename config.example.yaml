@@ -67,3 +67,14 @@ notify:
 # 报告文件输出目录（默认 ./reports；每次检查生成 report-YYYY-MM-DD-HHMMSS.md，
 # 保留最近 30 份，旧的自动清理）
 report_dir: reports
+
+# 代理（可选）：访问 Steam 或推送通知需要代理时配置（同时作用于两者）。
+# 支持两种写法：
+#   1. URL 字符串：http / https 请求都用同一个代理
+#   2. 映射：分别指定 http / https 代理（如 socks5h://127.0.0.1:7890）
+# 不配置（保持 null）则直连。
+# proxy: http://127.0.0.1:7890
+# proxy:
+#   http: http://127.0.0.1:7890
+#   https: http://127.0.0.1:7890
+proxy:

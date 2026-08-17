@@ -109,3 +109,39 @@ notify:
         config = load_config(path)
         assert config.template_title == "{game_name}"
         assert config.template_content == "{stage}\n{store_url}"
+
+
+class TestProxy:
+    def test_proxy_string_expands_to_both(self, tmp_path):
+        path = write_config(tmp_path, "proxy: http://127.0.0.1:7890\n")
+        config = load_config(path)
+        assert config.proxy == {
+            "http": "http://127.0.0.1:7890",
+            "https": "http://127.0.0.1:7890",
+        }
+
+    def test_proxy_mapping(self, tmp_path):
+        path = write_config(
+            tmp_path,
+            "proxy:\n  http: http://127.0.0.1:7890\n  https: socks5h://127.0.0.1:7891\n",
+        )
+        config = load_config(path)
+        assert config.proxy == {
+            "http": "http://127.0.0.1:7890",
+            "https": "socks5h://127.0.0.1:7891",
+        }
+
+    def test_proxy_missing_is_none(self, tmp_path):
+        path = write_config(tmp_path, "")
+        config = load_config(path)
+        assert config.proxy is None
+
+    def test_proxy_empty_string_is_none(self, tmp_path):
+        path = write_config(tmp_path, "proxy: ''\n")
+        config = load_config(path)
+        assert config.proxy is None
+
+    def test_proxy_invalid_raises(self, tmp_path):
+        path = write_config(tmp_path, "proxy: [1, 2]\n")
+        with pytest.raises(ConfigError):
+            load_config(path)

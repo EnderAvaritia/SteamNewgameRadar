@@ -57,6 +57,7 @@ class Config:
     default_template: dict[str, str] | None = None
     channels: list[Channel] = field(default_factory=list)
     report_dir: Path = Path(DEFAULT_REPORT_DIR)
+    proxy: dict[str, str] | None = None
     source_path: str = "config.yaml"
 
     @property
@@ -98,6 +99,7 @@ def _build_config(raw: dict[str, Any], path: Path) -> Config:
     interval = _interval_hours(raw.get("interval_hours"))
     default_template, channels = _parse_notify(raw.get("notify"))
     report_dir = Path(str(raw.get("report_dir") or DEFAULT_REPORT_DIR))
+    proxy = _proxy(raw.get("proxy"))
     return Config(
         publishers=publishers,
         games=games,
@@ -106,8 +108,28 @@ def _build_config(raw: dict[str, Any], path: Path) -> Config:
         default_template=default_template,
         channels=channels,
         report_dir=report_dir,
+        proxy=proxy,
         source_path=str(path),
     )
+
+
+def _proxy(value: Any) -> dict[str, str] | None:
+    """解析 proxy 段：URL 字符串（http/https 同用一个）或 http/https 映射。"""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        url = value.strip()
+        if not url:
+            return None
+        return {"http": url, "https": url}
+    if isinstance(value, dict):
+        result: dict[str, str] = {}
+        for key in ("http", "https"):
+            item = value.get(key)
+            if isinstance(item, str) and item.strip():
+                result[key] = item.strip()
+        return result or None
+    raise ConfigError("proxy 必须是 URL 字符串，或包含 http/https 的映射")
 
 
 def _string_list(value: Any, name: str) -> list[str]:
