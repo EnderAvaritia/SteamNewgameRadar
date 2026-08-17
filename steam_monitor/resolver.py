@@ -107,7 +107,8 @@ class Resolver:
                 gid = page_gid
         if clan_id is None or gid is None:
             return [], clan_id, gid
-        appids = self.client.creator_apps(clan_id, gid, flavor="all")
+        # flavor=all_upcoming：只取「即将发售」栏目（§5.2），不含已发售
+        appids = self.client.creator_apps(clan_id, gid, flavor="all_upcoming")
         return appids, clan_id, gid
 
     # ---------- 发行商匹配 ----------

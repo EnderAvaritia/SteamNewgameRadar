@@ -64,13 +64,14 @@ games:
   - 1245620                  # 直接 appid
 ```
 
-发行商监控使用 **creator 精准查询**（`saleaction/ajaxgetsaledynamicappquery`）：对每个发行商按其 clan 账号拉取其「即将发行 + 最新已发售」游戏列表（每发行商 1~2 次请求），不再轮询商店全局列表——快且精准。
+发行商监控使用 **creator 精准查询**（`saleaction/ajaxgetsaledynamicappquery`）：对每个发行商按其 clan 账号拉取其「**即将发售**」栏目的游戏列表（每发行商 1~2 次请求），不再轮询商店全局列表——快且精准。
 
 ### 检查点
 
 ```yaml
 checkpoints: [+14, +7, -3]   # + = 发售前，- = 发售后；同一天跨多个检查点只发最近一个
 interval_hours: 6            # daemon 模式检查间隔（小时）
+notify_on_first_seen: true   # 首次看到新游戏是否通知；false = 静默入库建基线
 cc: HK                       # Steam 商店区域代码（默认 cn；部分游戏 cn 区不可见，
                              # 发行商查询会漏掉锁区游戏，建议填实际区域如 HK/US）
 cookie: "sessionid=xxxxx; steamLoginSecure=xxxxx; ..."   # 可选：登录态 Cookie

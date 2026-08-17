@@ -51,6 +51,10 @@ checkpoints: [+14, +7, -3]
 # 常驻模式间隔（小时）
 interval_hours: 6
 
+# 首次看到新游戏时是否通知（默认 true）。
+# false = 首次看到静默入库（建立基线），只从之后的发售日公布/变更/检查点开始通知
+notify_on_first_seen: true
+
 # Steam 商店区域代码（cc 参数），影响可见游戏与价格；默认 cn。
 # 部分游戏在 cn 区不可见，发行商查询会漏掉锁区游戏；建议填实际区域（如 HK / US）。
 cc: HK
@@ -101,7 +105,7 @@ report_dir: reports
 
 - 核心接口：`GET https://store.steampowered.com/saleaction/ajaxgetsaledynamicappquery`
   - 关键参数：`clanAccountID`（发行商 clan 账号）、`clanAnnouncementGID`（**必填**，缺失返回 500）、
-    `flavor=all`（返回「即将发行 + 最新已发售」混排，upcoming 优先，一次覆盖两种形态）、
+    `flavor=all_upcoming`（只取「即将发售」栏目的未发售游戏；`flavor=all` 才会混入已发售）、
     `strFacetFilter={"type":7,"value":"game"}`（只取 game）、`start`/`count` 分页、
     `bUseCreatorHomeApps=true`
   - 响应 `appids[]` 直接返回 appid 列表；`possible_has_more` 指示是否还有下一页
@@ -110,10 +114,10 @@ report_dir: reports
     HTML 中 `data-props="{&quot;clanAccountID&quot;:...}"` 自动解析
   - `clanAnnouncementGID`：主页 **无法可靠解析**（主页 `gidEvent` 与所需 GID 相差 1，如
     404 vs 405），必须显式配置（从发行商主页"新发行/即将发行"tab 的地址栏 URL 获取）
-- 流程：对每个被监控的发行商 → 按其 clan 参数拉取 appid 列表（flavor=all 第一页 50 个即覆盖
-  upcoming + 最新已发售）→ 对每个 appid 调 appdetails 补全发售日/价格 → 进入检查点流程。
+- 流程：对每个被监控的发行商 → 按其 clan 参数拉取「即将发售」appid 列表（flavor=all_upcoming）
+  → 对每个 appid 调 appdetails 补全发售日/价格 → 进入检查点流程。
 - 发行商查询返回的 appid 天然属于该发行商，无需再匹配 publishers[] 字段。
-- 发行商出现此前未知的 appid → 触发"新游戏公布"事件（有/无发售日都要）。
+- 发行商出现此前未知的 appid → 触发"新游戏公布"事件（受 §10 的 notify_on_first_seen 开关控制）。
 
 ### 5.3 游戏监控线
 - 配置中的 games 解析为 appid（名称→`/api/storesearch` 搜索取第一个 `game` 类型结果；URL→提取数字；数字→直接使用）。
@@ -222,7 +226,10 @@ CREATE TABLE events_log (
 
 ## 10. 首次运行行为
 
-- **无特殊基线**：首次运行即正常触发窗口内所有检查点/事件（兼作冒烟测试）。
+- 首次运行对窗口内检查点/事件正常触发（兼作冒烟测试）。
+- 「新游戏公布」事件受配置 `notify_on_first_seen` 控制：
+  - `true`（默认）：首次看到的发行商游戏立即通知"新游戏公布"（首次运行会较吵）。
+  - `false`：首次看到静默入库（建立基线），不产生"新游戏公布"事件；发售日公布/变更/检查点照常。
 
 ## 11. 模块划分（steam_monitor/ 包）
 

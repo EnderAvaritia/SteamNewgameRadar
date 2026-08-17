@@ -300,15 +300,15 @@ class SteamClient:
         self,
         clan_account_id: int,
         clan_announcement_gid: str,
-        flavor: str = "all",
+        flavor: str = "all_upcoming",
         count: int = 50,
         max_pages: int = 1,
     ) -> list[int]:
         """按发行商 clan 账号拉取其游戏 appid 列表（§5.2 精准查询）。
 
-        ``flavor=all`` 返回「即将发行 + 最新已发售」混排（upcoming 优先），
-        一次请求即覆盖「发行商新游戏」两种形态。分页直到 possible_has_more=False
-        或达到 max_pages。失败返回空列表。
+        ``flavor=all_upcoming`` 只返回「即将发售」栏目的游戏（未发售）；
+        需要包含最新已发售时用 ``flavor=all``。分页直到 possible_has_more=False
+        或达到 max_pages。失败抛 SteamHTTPError / SteamRequestError。
         """
         appids: list[int] = []
         seen: set[int] = set()
