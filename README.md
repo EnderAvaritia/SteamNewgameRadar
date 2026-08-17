@@ -33,7 +33,7 @@ python -m venv .venv
 
 ## 快速开始
 
-1. 复制 `config.yaml` 并填写监控对象与通知渠道（见下文）。
+1. 复制 `config.example.yaml` 为 `config.yaml` 并填写监控对象与通知渠道（见下文）。`config.yaml` 本身不入库（含密钥与个人偏好）。
 2. 先手动跑一次（首次运行即会触发窗口内所有提醒，兼作冒烟测试）：
 
 ```bash
@@ -45,7 +45,7 @@ python -m venv .venv
 
 3. 查看报告：`reports/` 目录下的 `report-*.md`。
 
-## 配置说明（config.yaml）
+## 配置说明（config.example.yaml → config.yaml）
 
 ### 监控对象
 
