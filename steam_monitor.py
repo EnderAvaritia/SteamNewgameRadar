@@ -61,7 +61,7 @@ def _make_runtime(args: argparse.Namespace):
     config = load_config(args.config)
     state = State(args.db)
     notifier = _make_notifier(config)
-    client = SteamClient()
+    client = SteamClient(proxies=config.proxy)
     return config, state, notifier, client
 
 
