@@ -44,6 +44,34 @@ class TestFormats:
         assert parsed.raw == "21 Aug, 2026"
 
 
+class TestChineseFormats:
+    """schinese 中文日期格式（l=schinese 下 Steam 返回"年/月/日"）"""
+
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            "2026 年 8 月 21 日",
+            "2026年8月21日",
+            "2026 年 8月21日",
+        ],
+    )
+    def test_parses_chinese_dates(self, raw):
+        parsed = parse_release_date(raw, coming_soon=True)
+        assert parsed.date == D(2026, 8, 21)
+        assert parsed.status == SCHEDULED
+        assert parsed.raw == raw
+
+    def test_chinese_year_month_only_is_fuzzy(self):
+        parsed = parse_release_date("2026 年 8 月", coming_soon=True)
+        assert parsed.status == FUZZY
+        assert parsed.date is None
+
+    def test_chinese_year_only_is_fuzzy(self):
+        parsed = parse_release_date("2026 年", coming_soon=True)
+        assert parsed.status == FUZZY
+        assert parsed.date is None
+
+
 class TestComingSoon:
     """coming_soon 与状态的组合（DESIGN.md §6 策略 1/2）。"""
 

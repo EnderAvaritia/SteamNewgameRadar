@@ -63,7 +63,11 @@ class ParsedDate:
 
 
 def _normalize(raw: str) -> str:
-    """把英文月份名替换为两位数字，统一分隔符为空格。"""
+    """把英文月份名替换为两位数字，统一分隔符为空格。
+
+    同时兼容 schinese 中文日期格式：把「年/月」当分隔符、「日」当结束符
+    （"2026 年 8 月 21 日" → "2026 8 21"）。
+    """
     def _replace_month(match: re.Match) -> str:
         word = match.group(1).lower()
         if word in _MONTHS:
@@ -71,6 +75,8 @@ def _normalize(raw: str) -> str:
         return match.group(1)
 
     s = _MONTH_WORD_PATTERN.sub(_replace_month, raw)
+    s = re.sub(r"[年月]", " ", s)
+    s = re.sub(r"日", " ", s)
     s = s.replace(",", " ").replace("/", " ").replace("-", " ")
     return re.sub(r"\s+", " ", s).strip()
 
