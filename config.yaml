@@ -1,0 +1,69 @@
+# Steam 新游戏监控 — 配置文件模板（DESIGN.md §4）
+# 每个字段的含义与取值范围见下方注释；可直接复制为 config.yaml 使用。
+
+# 监控对象
+# ---------------------------------------------------------------------------
+
+# 发行商监控线：监控这些发行商是否有新游戏发行（含"公布新游戏但无发售日"的情报跟踪）。
+# 每个元素是一个发行商名，用于精确匹配 appdetails 返回的 publishers[]（忽略大小写与首尾空白）。
+publishers:
+  - 任天堂          # 发行商名（用于匹配 appdetails.publishers[]）
+
+# 游戏监控线：监控感兴趣的游戏是否临近发售 / 已发售。
+# 每个元素支持三种写法：
+#   1. 游戏名（自动解析为 appid，走 /api/storesearch 搜索，取第一个 game 类型结果）
+#   2. Steam 商店 URL（提取 app/ 与 / 之间的数字）
+#   3. 直接 appid
+games:
+  - 黑神话悟空       # 游戏名（自动解析为 appid）
+  - app/1245620/ELDEN_RING   # Steam 商店 URL（提取中间数字）
+  - 1245620                  # 直接 appid
+
+# 检查点（天）；+ = 发售前触发，- = 发售后触发。
+# 例：[+14, +7, -3] 表示发售前 14 天、发售前 7 天、发售后 3 天各提醒一次。
+# 触发条件：今天 >= 检查点日期 且 该检查点序号 > 上次已触发的序号。
+# 同一天跨越多个检查点时只发最近（序号最大）的一个；发售日变动会重置触发进度。
+checkpoints: [+14, +7, -3]
+
+# 常驻模式（daemon）的检查间隔（小时）
+interval_hours: 6
+
+# 通知渠道
+# ---------------------------------------------------------------------------
+# 结构：default 为全局默认模板（可选）；channels 为渠道列表（可为空 = 仅生成报告文件）。
+# 渠道未单独写 title/content 时使用全局默认模板；全局也没有时使用内置默认模板
+# （内置默认：title="{game_name}"，content="{stage}\n{store_url}"）。
+# 模板变量（str.format 语法，缺失变量渲染为空字符串，不会报错）：
+#   {game_name}      游戏名
+#   {publisher}      匹配到的发行商名（游戏监控线无发行商配置时为空）
+#   {stage}          stage 文案（如"发售日公布：将于 2026-08-21 发售"、"距发售还有 7 天"）
+#   {release_date}   具体发售日（YYYY-MM-DD）；无具体日期时为空
+#   {release_date_raw} Steam 返回的日期原文
+#   {days_until}     距发售天数（正=未发售，负=已发售）；无具体日期时为空
+#   {store_url}      商店链接 https://store.steampowered.com/app/{appid}/
+#   {price}          价格文本：免费→"免费"；有价格→"¥xx"；无价格→空
+notify:
+  # 全局默认模板（渠道未单独写模板时使用）
+  default:
+    title: "🎮 {game_name}"
+    content: "{stage}\n发售日：{release_date}\n{store_url}"
+
+  # 具体渠道列表：provider 必填（ntfy / serverchanturbo / pushplus）；
+  # 其余字段按 provider 需求透传给 onepush（如 topic、sendkey、token、priority 等）。
+  # title/content 可覆盖全局默认模板。
+  channels:
+    - provider: ntfy
+      topic: my-game-topic        # provider 专属参数
+      priority: high
+      # title/content 可覆盖全局默认
+      title: "{game_name}｜{stage}"
+
+    - provider: serverchanturbo
+      sendkey: SCTxxx
+
+    - provider: pushplus
+      token: xxxxxxxx
+
+# 报告文件输出目录（默认 ./reports；每次检查生成 report-YYYY-MM-DD-HHMMSS.md，
+# 保留最近 30 份，旧的自动清理）
+report_dir: reports
