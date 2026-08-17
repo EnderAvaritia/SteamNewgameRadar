@@ -89,6 +89,7 @@ def cmd_once(args: argparse.Namespace) -> int:
             config=config,
             state=state,
             notifier=notifier,
+            progress=print,
         )
         _print_summary(ctx)
         return 0
@@ -115,6 +116,7 @@ def cmd_daemon(args: argparse.Namespace) -> int:
                     config=config,
                     state=state,
                     notifier=notifier,
+                    progress=print,
                 )
                 _print_summary(ctx)
             except KeyboardInterrupt:
