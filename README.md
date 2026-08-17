@@ -73,7 +73,16 @@ checkpoints: [+14, +7, -3]   # + = 发售前，- = 发售后；同一天跨多�
 interval_hours: 6            # daemon 模式检查间隔（小时）
 cc: HK                       # Steam 商店区域代码（默认 cn；部分游戏 cn 区不可见，
                              # 发行商查询会漏掉锁区游戏，建议填实际区域如 HK/US）
+cookie: "sessionid=xxxxx; steamLoginSecure=xxxxx; ..."   # 可选：登录态 Cookie
 ```
+
+### 用户 Cookie（可选）
+
+需要登录态数据（成人内容、锁区完整信息等）时填写。浏览器登录 Steam 商店后：
+F12 → Network → 刷新 → 任选一个 `store.steampowered.com` 请求 → Request Headers →
+复制整个 **Cookie** 行粘贴到配置。
+
+> Cookie 是敏感凭据，`config.yaml` 已入 `.gitignore` 不会提交；过期后需重新复制。
 
 ### 代理
 

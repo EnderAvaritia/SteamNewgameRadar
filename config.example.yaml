@@ -44,6 +44,12 @@ interval_hours: 6
 # 注意：部分游戏在 cn 区不可见，发行商查询会因此漏掉锁区游戏；建议填你的实际区域（如 HK、US）。
 cc: HK
 
+# 用户 Cookie（可选）：需要登录态数据（成人内容、锁区完整信息、愿望单等）时填写。
+# 获取方式：浏览器登录 Steam 商店后，按 F12 → Network → 刷新页面 → 任选一个
+# store.steampowered.com 请求 → Request Headers → 复制整个 Cookie 行粘贴到这里。
+# 注意：Cookie 是敏感凭据，config.yaml 已加入 .gitignore 不会入库；过期需重新复制。
+# cookie: "sessionid=xxxxx; steamLoginSecure=xxxxx; ..."
+
 # 通知渠道
 # ---------------------------------------------------------------------------
 # 结构：default 为全局默认模板（可选）；channels 为渠道列表（可为空 = 仅生成报告文件）。

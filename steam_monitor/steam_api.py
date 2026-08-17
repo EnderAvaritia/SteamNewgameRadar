@@ -214,10 +214,14 @@ class SteamClient:
         limiter: RateLimiter | None = None,
         proxies: dict[str, str] | None = None,
         cc: str = "cn",
+        cookie: str | None = None,
     ):
         self.session = session if session is not None else requests.Session()
         if proxies:
             self.session.proxies.update(proxies)
+        if cookie:
+            # 显式 Cookie 头：requests 发送时优先于 session.cookies，原样携带
+            self.session.headers["Cookie"] = cookie
         self.base_url = base_url.rstrip("/")
         self.cc = (cc or "cn").strip().upper() or "cn"
         self.limiter = limiter if limiter is not None else RateLimiter(self.session)

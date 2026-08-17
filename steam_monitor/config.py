@@ -76,6 +76,7 @@ class Config:
     report_dir: Path = Path(DEFAULT_REPORT_DIR)
     proxy: dict[str, str] | None = None
     cc: str = DEFAULT_CC
+    cookie: str | None = None
     source_path: str = "config.yaml"
 
     @property
@@ -119,6 +120,7 @@ def _build_config(raw: dict[str, Any], path: Path) -> Config:
     report_dir = Path(str(raw.get("report_dir") or DEFAULT_REPORT_DIR))
     proxy = _proxy(raw.get("proxy"))
     cc = _cc(raw.get("cc"))
+    cookie = _cookie(raw.get("cookie"))
     return Config(
         publishers=publishers,
         games=games,
@@ -129,8 +131,18 @@ def _build_config(raw: dict[str, Any], path: Path) -> Config:
         report_dir=report_dir,
         proxy=proxy,
         cc=cc,
+        cookie=cookie,
         source_path=str(path),
     )
+
+
+def _cookie(value: Any) -> str | None:
+    """用户 Cookie（如 "sessionid=xxx; steamLoginSecure=xxx"），可选。"""
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigError("cookie 必须是 Cookie 字符串（如 \"sessionid=xxx; steamLoginSecure=xxx\"）")
+    return value.strip()
 
 
 def _cc(value: Any) -> str:

@@ -197,3 +197,25 @@ class TestProxy:
         path = write_config(tmp_path, "proxy: [1, 2]\n")
         with pytest.raises(ConfigError):
             load_config(path)
+
+
+class TestCookie:
+    def test_cookie_parsed(self, tmp_path):
+        path = write_config(tmp_path, "cookie: \"sessionid=abc; steamLoginSecure=def\"\n")
+        config = load_config(path)
+        assert config.cookie == "sessionid=abc; steamLoginSecure=def"
+
+    def test_cookie_missing_is_none(self, tmp_path):
+        path = write_config(tmp_path, "")
+        config = load_config(path)
+        assert config.cookie is None
+
+    def test_cookie_empty_raises(self, tmp_path):
+        path = write_config(tmp_path, "cookie: ''\n")
+        with pytest.raises(ConfigError):
+            load_config(path)
+
+    def test_cookie_invalid_type_raises(self, tmp_path):
+        path = write_config(tmp_path, "cookie: [1, 2]\n")
+        with pytest.raises(ConfigError):
+            load_config(path)

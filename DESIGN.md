@@ -55,6 +55,10 @@ interval_hours: 6
 # 部分游戏在 cn 区不可见，发行商查询会漏掉锁区游戏；建议填实际区域（如 HK / US）。
 cc: HK
 
+# 用户 Cookie（可选）：需要登录态数据（成人内容、锁区完整信息等）时填写。
+# 透传为所有 Steam 请求的 Cookie 请求头；config.yaml 已 gitignore。
+cookie: "sessionid=xxx; steamLoginSecure=xxx"
+
 # 通知渠道（可为空列表 = 仅报告文件）
 notify:
   # 全局默认模板（渠道未单独写模板时使用）

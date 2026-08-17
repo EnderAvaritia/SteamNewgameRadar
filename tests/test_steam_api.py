@@ -24,3 +24,18 @@ class TestSteamClientProxy:
         session.proxies["http"] = "http://old:8080"
         client = SteamClient(session=session, proxies={"http": "http://new:7890"})
         assert client.session.proxies["http"] == "http://new:7890"
+
+
+class TestSteamClientCookie:
+    def test_cookie_set_on_session_headers(self):
+        client = SteamClient(cookie="sessionid=abc; steamLoginSecure=def")
+        assert client.session.headers["Cookie"] == "sessionid=abc; steamLoginSecure=def"
+
+    def test_no_cookie_keeps_headers_clean(self):
+        client = SteamClient()
+        assert "Cookie" not in client.session.headers
+
+    def test_cc_normalized(self):
+        assert SteamClient(cc="hk").cc == "HK"
+        assert SteamClient(cc="").cc == "CN"
+        assert SteamClient().cc == "CN"
