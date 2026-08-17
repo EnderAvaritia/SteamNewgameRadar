@@ -75,7 +75,8 @@ notify:
   # title/content 可覆盖全局默认模板。
   channels:
     - provider: ntfy
-      topic: my-game-topic        # provider 专属参数
+      url: https://ntfy.sh      # ntfy 服务器地址（自建服务器填自己的，如 https://ntfy.example.com）
+      topic: my-game-topic      # provider 专属参数
       priority: high
       # title/content 可覆盖全局默认
       title: "{game_name}｜{stage}"

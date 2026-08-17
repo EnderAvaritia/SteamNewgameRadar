@@ -140,8 +140,8 @@ class TestDelivery:
         assert result.report_path is not None and result.report_path.exists()
 
     def test_channel_failure_isolation(self, tmp_path):
-        def flaky(**kwargs):
-            if kwargs.get("provider") == "bad":
+        def flaky(provider_name=None, **kwargs):
+            if provider_name == "bad":
                 raise RuntimeError("网络错误")
             return None
 

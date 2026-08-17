@@ -127,14 +127,14 @@ class Notifier:
                     title = safe_format(title_template, variables)
                     content = safe_format(content_template, variables)
                     kwargs: dict[str, Any] = dict(
-                        provider=channel.provider,
                         title=title,
                         content=content,
                         **channel.params,
                     )
                     if self.config.proxy:
                         kwargs["proxies"] = self.config.proxy
-                    self._notify_func(**kwargs)
+                    # onepush.notify 签名：notify(provider_name, **kwargs) —— provider 为位置参数
+                    self._notify_func(channel.provider, **kwargs)
                     result.sent += 1
                 except Exception as exc:
                     result.failed += 1

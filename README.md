@@ -134,7 +134,7 @@ notify:
 
 | 渠道 | provider 值 | 注册方式 | 关键参数 |
 |---|---|---|---|
-| ntfy | `ntfy` | 手机装 [ntfy](https://ntfy.sh) App，订阅一个自定义 topic（如 `my-game-topic`） | `topic`（必填）；可选 `priority`、`server`（自建服务器）、`token` |
+| ntfy | `ntfy` | 手机装 [ntfy](https://ntfy.sh) App，订阅一个自定义 topic（如 `my-game-topic`） | `url`（服务器地址，默认 `https://ntfy.sh`）、`topic`（必填）；可选 `priority`、`token` |
 | Server酱 Turbo | `serverchanturbo` | 访问 [sct.ftqq.com](https://sct.ftqq.com) 用微信扫码登录，获得 SendKey | `sendkey`（必填） |
 | Server酱 V3 | `serverchan` | 访问 [sc.ftqq.com](https://sc.ftqq.com) 注册 | `key`（必填） |
 | PushPlus | `pushplus` | 访问 [pushplus.plus](https://www.pushplus.plus) 微信扫码登录，获得 token | `token`（必填） |

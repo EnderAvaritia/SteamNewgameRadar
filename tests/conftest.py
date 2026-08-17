@@ -172,12 +172,12 @@ def fake_notifier() -> FakeNotifier:
 
 @pytest.fixture
 def recording_notify():
-    """返回 (fake_notify_func, calls) —— 记录 onepush 调用参数。"""
+    """返回 (fake_notify_func, calls) —— 记录 onepush 调用参数（provider 为位置参数）。"""
 
     calls: list[dict] = []
 
-    def fake_notify(**kwargs):
-        calls.append(kwargs)
+    def fake_notify(provider_name=None, **kwargs):
+        calls.append({"provider": provider_name, **kwargs})
 
     return fake_notify, calls
 
