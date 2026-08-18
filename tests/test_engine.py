@@ -123,12 +123,12 @@ class TestPublisherLine:
         assert state.get_game(100) is not None
 
     def test_missing_gid_warns(self, fake_client, state, fake_notifier):
-        # 主页只能解析 clan_id，gid 缺失 → 警告提示显式配置
+        # 主页只能解析 clan_id，gid 缺失 → 警告提示参数解析失败
         fake_client.set_publisher_creator("任天堂", 45479601)  # 无 gid
         config = make_config(publishers=["任天堂"])
         ctx = run(fake_client, config, state, fake_notifier)
         assert ctx.events == []
-        assert any("缺少 creator 查询参数" in w for w in ctx.warnings)
+        assert any("creator 查询参数解析失败" in w for w in ctx.warnings)
 
     def test_non_game_type_skipped(self, fake_client, state, fake_notifier):
         self._setup_publisher(fake_client)

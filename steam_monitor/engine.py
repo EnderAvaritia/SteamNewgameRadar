@@ -103,10 +103,11 @@ def run_check(
             continue
         if clan_id is None or gid is None:
             ctx.warnings.append(
-                f"发行商「{publisher.name}」：缺少 creator 查询参数"
+                f"发行商「{publisher.name}」：creator 查询参数解析失败"
                 f"（clan_account_id={'有' if clan_id else '无'}，"
                 f"clan_announcement_gid={'有' if gid else '无'}；"
-                f"后者主页无法自动解析，请在配置中显式填写）"
+                f"主页未解析到对应字段，请检查发行商名是否正确，"
+                f"或显式配置 clan_account_id / clan_announcement_gid）"
             )
             continue
         _log(f"发行商「{publisher.name}」（clan {clan_id}）：候选 {len(appids)} 个")

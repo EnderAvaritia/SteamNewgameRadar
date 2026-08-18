@@ -51,12 +51,14 @@ python -m venv .venv
 
 ```yaml
 publishers:
-  # 推荐：映射形式，显式给出 creator 查询参数（见 config.example.yaml 注释说明如何获取）
-  - name: 072projectx
-    clan_account_id: 45479601                 # 发行商主页的 clanAccountID
-    clan_announcement_gid: 509607220045941405 # 发行商主页"新发行/即将发行"tab 的 clanAnnouncementGID
-  # 简化形式：只写名字，clan_account_id 自动从发行商主页解析（gid 仍需显式配置）
-  - 任天堂
+  # 最简：只写发行商名，clan_account_id 与 clan_announcement_gid 都自动从主页解析
+  #（gid = 主页 gidEvent + 1，已实测验证），运行时多一次主页请求
+  - Kagura
+  - 072projectx
+  # 可选优化：映射形式显式给出 creator 查询参数，省去每次运行解析主页
+  # - name: 072projectx
+  #   clan_account_id: 45479601                 # 发行商主页的 clanAccountID
+  #   clan_announcement_gid: 509607220045941405 # 可选：主页 gidEvent + 1
 
 games:
   - 黑神话悟空       # 游戏名（自动搜索解析为 appid）

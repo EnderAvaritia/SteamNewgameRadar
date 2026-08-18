@@ -39,3 +39,60 @@ class TestSteamClientCookie:
         assert SteamClient(cc="hk").cc == "HK"
         assert SteamClient(cc="").cc == "CN"
         assert SteamClient().cc == "CN"
+
+
+class TestPublisherCreatorParams:
+    """publisher_creator_params：从主页 HTML 解析 clanAccountID，并推导可用 GID（gidEvent + 1）。"""
+
+    class _FakeResponse:
+        def __init__(self, status_code: int, text: str):
+            self.status_code = status_code
+            self.text = text
+
+    class _FakeLimiter:
+        def __init__(self, response):
+            self.response = response
+            self.requested_url: str | None = None
+
+        def request(self, method: str, url: str):
+            self.requested_url = url
+            return self.response
+
+    def _client_with(self, response) -> SteamClient:
+        return SteamClient(limiter=self._FakeLimiter(response))
+
+    def test_parses_clan_id_and_derives_gid(self):
+        html = (
+            '<div data-featuretarget="creator-home-event" data-props="{'
+            "&quot;clanAccountID&quot;:32398519,"
+            '&quot;gidEvent&quot;:&quot;497222321068573320&quot;}"></div>'
+        )
+        client = self._client_with(self._FakeResponse(200, html))
+        clan_id, gid = client.publisher_creator_params("Kagura")
+        assert clan_id == 32398519
+        assert gid == "497222321068573321"  # gidEvent + 1 = 可用 clanAnnouncementGID
+
+    def test_non_200_returns_none(self):
+        client = self._client_with(self._FakeResponse(403, "forbidden"))
+        assert client.publisher_creator_params("Kagura") == (None, None)
+
+    def test_missing_gid_event_returns_none_gid(self):
+        html = '<div data-props="{&quot;clanAccountID&quot;:32398519}"></div>'
+        client = self._client_with(self._FakeResponse(200, html))
+        clan_id, gid = client.publisher_creator_params("Kagura")
+        assert clan_id == 32398519
+        assert gid is None
+
+    def test_missing_clan_id_returns_none_clan(self):
+        html = '<div data-props="{&quot;gidEvent&quot;:&quot;123&quot;}"></div>'
+        client = self._client_with(self._FakeResponse(200, html))
+        clan_id, gid = client.publisher_creator_params("Kagura")
+        assert clan_id is None
+        assert gid == "124"
+
+    def test_requests_publisher_page_url(self):
+        html = '<div data-props="{&quot;clanAccountID&quot;:1,&quot;gidEvent&quot;:&quot;1&quot;}"></div>'
+        limiter = self._FakeLimiter(self._FakeResponse(200, html))
+        client = SteamClient(limiter=limiter)
+        client.publisher_creator_params("Kagura")
+        assert "https://store.steampowered.com/publisher/Kagura" in limiter.requested_url

@@ -53,9 +53,8 @@ class Publisher:
 
     - ``clan_account_id``：发行商 clan 账号 ID（发行商主页的 ``clanAccountID``）。
       为 None 时由脚本从 ``store.steampowered.com/publisher/{name}`` 主页自动解析。
-    - ``clan_announcement_gid``：creator 查询接口必需的公告 GID（发行商主页
-      "新发行/即将发行" tab 的 ``clanAnnouncementGID`` 参数）。主页无法自动解析，
-      建议显式填写。
+    - ``clan_announcement_gid``：creator 查询接口的公告 GID。为 None 时同样
+      自动推导（主页 gidEvent + 1，已验证）。两个参数都省略时仅填发行商名即可。
     """
 
     name: str

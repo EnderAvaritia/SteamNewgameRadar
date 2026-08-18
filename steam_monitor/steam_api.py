@@ -372,9 +372,9 @@ class SteamClient:
     def publisher_creator_params(self, name: str) -> tuple[int | None, str | None]:
         """解析发行商主页 HTML 中的 creator 查询参数。
 
-        返回 ``(clan_account_id, gid_event)``；gid_event 为主页「creator-home-event」
-        事件 ID，通常不能直接用作 clanAnnouncementGID（两者差 1），建议显式配置。
-        解析失败对应值为 None。
+        返回 ``(clan_account_id, clan_announcement_gid)``；GID 由主页
+        「creator-home-event」的 gidEvent 自动推导（已验证 = gidEvent + 1），
+        无需手动配置。解析失败对应值为 None。
         """
         url = PUBLISHER_PAGE_URL.format(name=quote(name))
         resp = self.limiter.request("GET", url)
@@ -385,7 +385,10 @@ class SteamClient:
         clan_match = _CLAN_ID_PATTERNS.search(text)
         gid_match = _GID_PATTERNS.search(text)
         clan_id = int(clan_match.group(1)) if clan_match else None
-        gid = gid_match.group(1) if gid_match else None
+        # gidEvent 与 clanAnnouncementGID 差 1：主页 gidEvent=N → 可用 GID = N+1
+        gid = str(int(gid_match.group(1)) + 1) if gid_match else None
         if clan_id is None:
             logger.warning("发行商主页未找到 clanAccountID：%s", name)
+        if gid is None:
+            logger.warning("发行商主页未找到 gidEvent：%s", name)
         return clan_id, gid

@@ -92,8 +92,8 @@ class Resolver:
         """按发行商拉取其游戏 appid 列表（§5.2 精准查询）。
 
         - clan_account_id / clan_announcement_gid 显式配置则直接用；
-          clan_account_id 缺失时从发行商主页自动解析（gid 主页无法可靠解析，
-          建议显式配置）。
+          缺省时两者都从发行商主页自动解析（gid 由 gidEvent + 1 推导，
+          仅配置发行商名即可，无需手动抓取 GID）。
         - 返回 ``(appids, clan_id, gid)``；clan_id 或 gid 为 None 表示缺参数
           （调用方记警告）。
         """
